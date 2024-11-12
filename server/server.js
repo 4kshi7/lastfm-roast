@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import axios from "axios";
+import cors from "cors";
 import Groq from "groq-sdk";
 
 dotenv.config();
@@ -10,6 +11,9 @@ const api_key = process.env.API_Key;
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 app.use(express.json());
+app.use(cors({
+  origin: "http://localhost:5173"  // Replace with your frontend URL
+}));
 
 // Function to fetch recent tracks and current track
 const getUserHistory = async (username) => {
@@ -71,19 +75,28 @@ app.post("/api/roast", async (req, res) => {
   try {
     const { currentTrack, fourWeeksTracks } = await getUserHistory(username);
 
-    if (!currentTrack) {
-      return res.json({ message: "No current track found to roast!" });
+    let roastTrack = currentTrack;
+    
+    // If no current track, pick the most recent track from fourWeeksTracks
+    if (!roastTrack && fourWeeksTracks.length > 0) {
+      roastTrack = fourWeeksTracks[0]; // The latest track in the past 4 weeks
+    }
+
+    if (!roastTrack) {
+      return res.json({ message: "No recent track found to roast!" });
     }
 
     const roastText = await generateRoastWithGroq(
-      currentTrack.artist.name,
+      roastTrack.artist.name,
       fourWeeksTracks
     );
-    return res.json({ roast: roastText, currentTrack });
+
+    return res.json({ roast: roastText, roastTrack });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
 });
+
 
 app.listen(port, () => {
   console.log(`Server is active on http://localhost:${port}`);
